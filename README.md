@@ -33,9 +33,7 @@
 ```bash
 pip install streamlit pandas google-api-python-client requests
 
-### 3. Запуск приложения
-```bash
-streamlit run main.py
+
 
 ### 📋 Инструкция по использованию
 
