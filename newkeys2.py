@@ -29,17 +29,50 @@ def get_gsc_service_sa():
 
 
 def get_urls_from_sitemap(url):
-    """Парсинг URL из Sitemap XML"""
+    """
+    Рекурсивно извлекает все URL из Sitemap или Sitemap Index.
+    Поддерживает любые протоколы в xmlns (http/https).
+    """
+    all_urls = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         res = requests.get(url, headers=headers, timeout=20)
         res.raise_for_status()
-        tree = ElementTree.fromstring(res.content)
-        ns = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
-        urls = [loc.text for loc in tree.findall(".//ns:loc", ns)]
-        return urls
+
+        # Парсим XML
+        root = ElementTree.fromstring(res.content)
+
+        # Динамически определяем Namespace
+        # Извлекаем содержимое фигурных скобок из тега корня, например {http://...}
+        ns_uri = ""
+        if root.tag.startswith('{'):
+            ns_uri = root.tag.split('}')[0].strip('{')
+
+        ns = {'ns': ns_uri} if ns_uri else {}
+        # Если namespace нет, ищем просто тег, если есть — через префикс
+        prefix = "ns:" if ns_uri else ""
+
+        # 1. Проверяем, не индекс ли это сайтмапов (содержит другие sitemap)
+        sitemaps = root.findall(f".//{prefix}sitemap", ns)
+        if sitemaps:
+            for sitemap in sitemaps:
+                loc = sitemap.find(f"{prefix}loc", ns)
+                if loc is not None and loc.text:
+                    # Рекурсивный вызов для вложенного файла
+                    all_urls.extend(get_urls_from_sitemap(loc.text))
+
+        # 2. Извлекаем обычные URL (тег <url>)
+        urls = root.findall(f".//{prefix}url", ns)
+        for u in urls:
+            loc = u.find(f"{prefix}loc", ns)
+            if loc is not None and loc.text:
+                all_urls.append(loc.text)
+
+        return list(set(all_urls))  # Убираем дубликаты на всякий случай
+
     except Exception as e:
-        st.error(f"Ошибка при загрузке Sitemap: {e}")
+        st.error(f"Ошибка при обработке {url}: {e}")
         return []
 
 
